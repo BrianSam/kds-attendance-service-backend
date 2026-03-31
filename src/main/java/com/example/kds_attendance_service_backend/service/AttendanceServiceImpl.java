@@ -1,6 +1,8 @@
 package com.example.kds_attendance_service_backend.service;
 
 import com.example.kds_attendance_service_backend.dto.AttendanceRequestDto;
+import com.example.kds_attendance_service_backend.exception.BadRequestException;
+import com.example.kds_attendance_service_backend.exception.ResourceNotFoundException;
 import com.example.kds_attendance_service_backend.model.Area;
 import com.example.kds_attendance_service_backend.model.Attendance;
 import com.example.kds_attendance_service_backend.model.AttendanceStatus;
@@ -32,16 +34,19 @@ public class AttendanceServiceImpl implements AttendanceService{
         Employee authEmployee = getCurrentEmployee();
 
         Employee employee = employeeRepository.findById(authEmployee.getId())
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
         LocalDate today = LocalDate.now();
+        log.info("Employee {} is marking attendance", employee.getId());
 
         // Step 2: Check duplicate
         if (attendanceRepository.existsByEmployeeAndDate(employee, today)) {
-            throw new RuntimeException("Attendance already marked for today");
+            log.warn("Employee {} already marked attendance for {}", employee.getId(), today);
+            throw new BadRequestException("Attendance already marked for today");
         }
         Area area = employee.getArea();
         if (area == null) {
-            throw new RuntimeException("Employee is not assigned to any area");
+            log.warn("Employee {} already marked attendance for {}", employee.getId(), today);
+            throw new BadRequestException("Employee is not assigned to any area");
         }
 
         boolean isInside = isWithinRadius(
@@ -54,7 +59,7 @@ public class AttendanceServiceImpl implements AttendanceService{
         );
 
         if (!isInside) {
-            throw new RuntimeException("You are outside allowed location please com closer to area !! ");
+            throw new BadRequestException("You are outside allowed location please com closer to area !! ");
         }
         LocalTime currentTime = LocalTime.now();
 
@@ -75,7 +80,7 @@ public class AttendanceServiceImpl implements AttendanceService{
                 .build();
 
         attendanceRepository.save(attendance);
-        log.info("attendance for employee id {} for date {} marked successfully",employee.getId(),today);
+        log.info("attendance for employee id {} for date {} with status {} marked successfully",employee.getId(),today,attendance.getStatus());
     }
 
     private Employee getCurrentEmployee() {
