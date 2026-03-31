@@ -6,7 +6,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "attendance")
+@Table(name = "attendance",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"employee_id", "date"})
+        })
 @Getter
 @Setter
 @Builder
@@ -22,12 +25,15 @@ public class Attendance extends BaseEntity {
     @JoinColumn(name = "area_id", nullable = false)
     private Area area;
 
-    private LocalDateTime checkInTime;
+    @Column(name = "marked_at", nullable = false)
+    private LocalDateTime markedAt;
 
-    private LocalDateTime checkOutTime;
+    @Enumerated(EnumType.STRING)
+    private AttendanceStatus status;
 
     private LocalDate date;
 
+    @Column(name = "photo_url")
     private String photoUrl;
 
     private Double latitude;

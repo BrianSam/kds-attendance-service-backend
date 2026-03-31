@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalTime;
+
 @Entity
 @Table(name = "areas")
 @Getter
@@ -22,6 +24,12 @@ public class Area extends BaseEntity {
     @Column(nullable = false)
     private Double longitude;
 
-    @Column(name = "qr_code", nullable = false, unique = true)
-    private String qrCode;
+
+    @Column(name = "late_time", nullable = false)
+    private LocalTime lateTime;
+
+    @Column(name = "radius", nullable = false)
+    private Double radius;
+
+
 }

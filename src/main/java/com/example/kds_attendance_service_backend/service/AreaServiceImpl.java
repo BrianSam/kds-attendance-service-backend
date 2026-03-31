@@ -29,7 +29,8 @@ public class AreaServiceImpl implements AreaService{
                 .name(createAreaRequestDto.getName())
                 .longitude(createAreaRequestDto.getLongitude())
                 .latitude(createAreaRequestDto.getLatitude())
-                .qrCode(qr)
+                .radius(createAreaRequestDto.getRadius())
+                .lateTime(createAreaRequestDto.getLateTime())
                 .build();
 
 

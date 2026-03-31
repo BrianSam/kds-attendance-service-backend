@@ -31,8 +31,7 @@ public class Employee extends BaseEntity {
     @Column(nullable = false)
     private Status status;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "area_id",
-    nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "area_id")
     private Area area;
 }

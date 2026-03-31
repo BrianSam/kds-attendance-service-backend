@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalTime;
+
 @Data
 public class CreateAreaRequestDto {
 
@@ -14,6 +16,9 @@ public class CreateAreaRequestDto {
 
     private Double longitude;
 
+    private LocalTime lateTime;
 
+
+    private Double radius;
 
 }
