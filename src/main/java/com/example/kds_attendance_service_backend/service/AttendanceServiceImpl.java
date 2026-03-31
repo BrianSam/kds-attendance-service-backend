@@ -9,6 +9,7 @@ import com.example.kds_attendance_service_backend.model.AttendanceStatus;
 import com.example.kds_attendance_service_backend.model.Employee;
 import com.example.kds_attendance_service_backend.repository.AttendanceRepository;
 import com.example.kds_attendance_service_backend.repository.EmployeeRepository;
+import com.example.kds_attendance_service_backend.repository.HolidayRepository;
 import com.example.kds_attendance_service_backend.security.CustomUserDetails;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class AttendanceServiceImpl implements AttendanceService{
 
     private final AttendanceRepository attendanceRepository;
     private final EmployeeRepository employeeRepository;
+    private final HolidayRepository holidayRepository;
     @Override
     @Transactional
     public void markAttendance(AttendanceRequestDto request) {
@@ -36,6 +38,19 @@ public class AttendanceServiceImpl implements AttendanceService{
         Employee employee = employeeRepository.findById(authEmployee.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
         LocalDate today = LocalDate.now();
+        Area area = employee.getArea();
+        if (area == null) {
+
+            throw new BadRequestException("Employee is not assigned to any area");
+        }
+        boolean isHoliday =
+                holidayRepository.existsByDate(today) ||
+                        holidayRepository.existsByDateAndAreaId(today, area.getId());
+
+        if (isHoliday) {
+            throw new BadRequestException("Attendance cannot be marked on holiday");
+        }
+
         log.info("Employee {} is marking attendance", employee.getId());
 
         // Step 2: Check duplicate
@@ -43,11 +58,9 @@ public class AttendanceServiceImpl implements AttendanceService{
             log.warn("Employee {} already marked attendance for {}", employee.getId(), today);
             throw new BadRequestException("Attendance already marked for today");
         }
-        Area area = employee.getArea();
-        if (area == null) {
-            log.warn("Employee {} already marked attendance for {}", employee.getId(), today);
-            throw new BadRequestException("Employee is not assigned to any area");
-        }
+
+
+
 
         boolean isInside = isWithinRadius(
                 request.getLatitude(),

@@ -43,17 +43,17 @@ public class JwtUtil {
                 .getBody();
     }
 
-    // ✅ NEW: extract userId
+    //  extract userId
     public Long extractUserId(String token) {
         return Long.parseLong(extractClaims(token).getSubject());
     }
 
-    // ✅ NEW: extract role
+    //  extract role
     public String extractRole(String token) {
         return extractClaims(token).get("role", String.class);
     }
 
-    // ✅ NEW: validate token
+    //  validate token
     public boolean isTokenValid(String token) {
         try {
             extractClaims(token);
