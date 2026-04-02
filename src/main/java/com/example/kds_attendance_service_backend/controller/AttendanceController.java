@@ -2,6 +2,7 @@ package com.example.kds_attendance_service_backend.controller;
 
 import com.example.kds_attendance_service_backend.dto.AttendanceRequestDto;
 import com.example.kds_attendance_service_backend.dto.DailyAttendanceResponseDto;
+import com.example.kds_attendance_service_backend.dto.PageResponse;
 import com.example.kds_attendance_service_backend.service.AttendanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,7 +29,7 @@ public class AttendanceController {
 
     @GetMapping("/report/daily")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Page<DailyAttendanceResponseDto>> getDailyReport(
+    public ResponseEntity<PageResponse<DailyAttendanceResponseDto>> getDailyReport(
             @RequestParam Long areaId,
             @RequestParam String date,
             @RequestParam int page,
@@ -36,8 +37,16 @@ public class AttendanceController {
     ) {
         LocalDate localDate = LocalDate.parse(date);
 
-        return ResponseEntity.ok(
-                attendanceService.getDailyReport(areaId, localDate, page, size)
-        );
+      Page<DailyAttendanceResponseDto>pageResult = attendanceService.getDailyReport(areaId,localDate,page,size);
+
+      PageResponse<DailyAttendanceResponseDto> response = new PageResponse<>(
+              pageResult.getContent(),
+              pageResult.getNumber(),
+              pageResult.getSize(),
+              pageResult.getTotalElements(),
+              pageResult.getTotalPages()
+      );
+      return ResponseEntity.ok(response);
+
     }
 }
