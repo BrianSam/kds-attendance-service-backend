@@ -1,6 +1,7 @@
 package com.example.kds_attendance_service_backend.service;
 
 import com.example.kds_attendance_service_backend.dto.AttendanceRequestDto;
+import com.example.kds_attendance_service_backend.dto.DailyAttendanceResponseDto;
 import com.example.kds_attendance_service_backend.exception.BadRequestException;
 import com.example.kds_attendance_service_backend.exception.ResourceNotFoundException;
 import com.example.kds_attendance_service_backend.model.Area;
@@ -11,16 +12,26 @@ import com.example.kds_attendance_service_backend.repository.AttendanceRepositor
 import com.example.kds_attendance_service_backend.repository.EmployeeRepository;
 import com.example.kds_attendance_service_backend.repository.HolidayRepository;
 import com.example.kds_attendance_service_backend.security.CustomUserDetails;
-import jakarta.transaction.Transactional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -94,6 +105,73 @@ public class AttendanceServiceImpl implements AttendanceService{
 
         attendanceRepository.save(attendance);
         log.info("attendance for employee id {} for date {} with status {} marked successfully",employee.getId(),today,attendance.getStatus());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DailyAttendanceResponseDto> getDailyReport(Long areaId, LocalDate date, int page, int size) {
+        log.info("Fetching daily attendance report for areaId={}, date={}, page={}, size={}",
+                areaId, date, page, size);
+        Pageable pageable = PageRequest.of(page,size);
+
+        Page<Employee>pagedEmployees = employeeRepository.findByAreaId(areaId,pageable);
+        List<Employee>employeesList = pagedEmployees.getContent();
+        log.debug("Fetched {} employees for areaId={}", employeesList.size(), areaId);
+
+        boolean isHoliday = holidayRepository.existsHoliday(date, areaId);
+
+        if(isHoliday){
+            log.info("Date {} is a holiday for areaId={}", date, areaId);
+            List<DailyAttendanceResponseDto> holidayList = employeesList.stream()
+                    .map(emp->new DailyAttendanceResponseDto(emp.getName(),"HOLIDAY",null)).toList();
+            return new PageImpl<>(holidayList,pageable,pagedEmployees.getTotalElements());
+        }
+
+            List<Long>employeeIds = employeesList.stream().map(emp->emp.getId()).toList();
+            List<Attendance>attendances = attendanceRepository.findByEmployeeIdInAndDate(employeeIds,date);
+        log.debug("Fetched {} attendance records for date={}", attendances.size(), date);
+
+            Map<Long,Attendance>attendanceMap = new HashMap<>();
+
+            for(Attendance a:attendances){
+                Long empId = a.getEmployee().getId();
+                attendanceMap.put(empId,a);
+            }
+            List<DailyAttendanceResponseDto>responseDtoList = new ArrayList<>();
+
+            for(Employee emp :employeesList){
+                Long empId = emp.getId();
+                String name = emp.getName();
+
+                if(attendanceMap.containsKey(empId)){
+                    String status = attendanceMap.get(empId).getStatus().name();
+                    String photoUrl = attendanceMap.get(empId).getPhotoUrl();
+                    DailyAttendanceResponseDto responseDto = new DailyAttendanceResponseDto(
+                            name,
+                            status,
+                            photoUrl
+                    );
+                    responseDtoList.add(responseDto);
+
+
+                }
+                else{
+                    DailyAttendanceResponseDto responseDto = new DailyAttendanceResponseDto(
+                            name,
+                            "ABSENT",
+                            null
+                    );
+                    responseDtoList.add(responseDto);
+                }
+            }
+        log.info("Successfully generated report for areaId={}, date={}", areaId, date);
+
+            return new PageImpl<>(responseDtoList,pageable,pagedEmployees.getTotalElements());
+
+
+
+
+
     }
 
     private Employee getCurrentEmployee() {
