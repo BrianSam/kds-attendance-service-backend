@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Random;
 
@@ -41,6 +43,9 @@ public class EmployeeServiceImpl implements EmployeeService{
 
         String rawPassword = generatePassword();
         String encodePassword = bCryptPasswordEncoder.encode(rawPassword);
+        LocalDate joiningDate = employeeDto.getJoiningDate() != null
+                ? employeeDto.getJoiningDate()
+                : LocalDate.now();
 
         Employee employee = Employee.builder()
                 .name(employeeDto.getName())
@@ -49,6 +54,7 @@ public class EmployeeServiceImpl implements EmployeeService{
                 .role(Role.EMPLOYEE)
                 .status(Status.ACTIVE)
                 .area(area)
+                .joiningDate(joiningDate)
                 .build();
 
         try {
@@ -60,6 +66,37 @@ public class EmployeeServiceImpl implements EmployeeService{
 
 
         return rawPassword;
+    }
+
+    @Override
+    @Transactional
+    public void markEmployeeExit(Long employeeId, LocalDate exitDate) {
+        Employee emp = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+
+        // Validation 1: exitDate null
+        if (exitDate == null) {
+            throw new BadRequestException("Exit date is required");
+        }
+
+        // Validation 2: before joining
+        if (exitDate.isBefore(emp.getJoiningDate())) {
+            throw new BadRequestException("Exit date cannot be before joining date");
+        }
+
+        // Validation 3: already exited
+        if (emp.getExitDate() != null) {
+            throw new BadRequestException("Employee already has an exit date");
+        }
+
+        // Validation 4: future date (optional rule)
+        if (exitDate.isAfter(LocalDate.now())) {
+            throw new BadRequestException("Exit date cannot be in future");
+        }
+
+        emp.setExitDate(exitDate);
+
+        employeeRepository.save(emp);
     }
 
     private String generatePassword() {

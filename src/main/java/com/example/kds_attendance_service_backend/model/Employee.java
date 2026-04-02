@@ -3,6 +3,7 @@ package com.example.kds_attendance_service_backend.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 
 
 @Entity
@@ -34,4 +35,10 @@ public class Employee extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "area_id")
     private Area area;
+
+    @Column(name = "joining_date", nullable = false)
+    private LocalDate joiningDate;
+
+    @Column(name = "exit_date")
+    private LocalDate exitDate;
 }

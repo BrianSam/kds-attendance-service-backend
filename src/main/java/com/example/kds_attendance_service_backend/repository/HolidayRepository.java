@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 
 
 public interface HolidayRepository extends JpaRepository<Holiday,Long> {
@@ -21,4 +22,16 @@ public interface HolidayRepository extends JpaRepository<Holiday,Long> {
     """)
     boolean existsHoliday(@Param("date") LocalDate date,
                           @Param("areaId") Long areaId);
+
+    @Query("""
+    SELECT h
+    FROM Holiday h
+    WHERE h.date BETWEEN :startDate AND :endDate
+    AND (h.area.id = :areaId OR h.area IS NULL)
+""")
+    List<Holiday> findHolidaysForMonth(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("areaId") Long areaId
+    );
 }

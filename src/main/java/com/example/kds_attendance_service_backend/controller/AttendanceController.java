@@ -2,6 +2,7 @@ package com.example.kds_attendance_service_backend.controller;
 
 import com.example.kds_attendance_service_backend.dto.AttendanceRequestDto;
 import com.example.kds_attendance_service_backend.dto.DailyAttendanceResponseDto;
+import com.example.kds_attendance_service_backend.dto.MonthlyAttendanceResponseDto;
 import com.example.kds_attendance_service_backend.dto.PageResponse;
 import com.example.kds_attendance_service_backend.service.AttendanceService;
 import lombok.RequiredArgsConstructor;
@@ -49,4 +50,31 @@ public class AttendanceController {
       return ResponseEntity.ok(response);
 
     }
+
+    @GetMapping("/report/monthly")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PageResponse<MonthlyAttendanceResponseDto>> getMonthlyReport(
+            @RequestParam Long areaId,
+            @RequestParam int year,
+            @RequestParam int month,
+            @RequestParam int page,
+            @RequestParam int size
+    ) {
+
+        Page<MonthlyAttendanceResponseDto> pageResult =
+                attendanceService.getMonthlyReport(areaId, year, month, page, size);
+
+        PageResponse<MonthlyAttendanceResponseDto> response =
+                new PageResponse<>(
+                        pageResult.getContent(),
+                        pageResult.getNumber(),
+                        pageResult.getSize(),
+                        pageResult.getTotalElements(),
+                        pageResult.getTotalPages()
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+
 }

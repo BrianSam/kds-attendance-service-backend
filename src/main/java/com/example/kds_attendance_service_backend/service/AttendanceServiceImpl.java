@@ -2,12 +2,10 @@ package com.example.kds_attendance_service_backend.service;
 
 import com.example.kds_attendance_service_backend.dto.AttendanceRequestDto;
 import com.example.kds_attendance_service_backend.dto.DailyAttendanceResponseDto;
+import com.example.kds_attendance_service_backend.dto.MonthlyAttendanceResponseDto;
 import com.example.kds_attendance_service_backend.exception.BadRequestException;
 import com.example.kds_attendance_service_backend.exception.ResourceNotFoundException;
-import com.example.kds_attendance_service_backend.model.Area;
-import com.example.kds_attendance_service_backend.model.Attendance;
-import com.example.kds_attendance_service_backend.model.AttendanceStatus;
-import com.example.kds_attendance_service_backend.model.Employee;
+import com.example.kds_attendance_service_backend.model.*;
 import com.example.kds_attendance_service_backend.repository.AttendanceRepository;
 import com.example.kds_attendance_service_backend.repository.EmployeeRepository;
 import com.example.kds_attendance_service_backend.repository.HolidayRepository;
@@ -27,10 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +57,13 @@ public class AttendanceServiceImpl implements AttendanceService{
 
         if (isHoliday) {
             throw new BadRequestException("Attendance cannot be marked on holiday");
+        }
+        if (today.isBefore(employee.getJoiningDate())) {
+            throw new BadRequestException("Employee has not joined yet");
+        }
+
+        if (employee.getExitDate() != null && today.isAfter(employee.getExitDate())) {
+            throw new BadRequestException("Employee has already exited");
         }
 
         log.info("Employee {} is marking attendance", employee.getId());
@@ -114,7 +118,7 @@ public class AttendanceServiceImpl implements AttendanceService{
                 areaId, date, page, size);
         Pageable pageable = PageRequest.of(page,size);
 
-        Page<Employee>pagedEmployees = employeeRepository.findByAreaId(areaId,pageable);
+        Page<Employee>pagedEmployees = employeeRepository.findActiveEmployeesForDate(areaId,date,pageable);
         List<Employee>employeesList = pagedEmployees.getContent();
         log.debug("Fetched {} employees for areaId={}", employeesList.size(), areaId);
 
@@ -172,6 +176,152 @@ public class AttendanceServiceImpl implements AttendanceService{
 
 
 
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MonthlyAttendanceResponseDto> getMonthlyReport(
+            Long areaId,
+            int year,
+            int month,
+            int page,
+            int size
+    ) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        // 1. Validate future month
+        YearMonth requestedMonth = YearMonth.of(year, month);
+        YearMonth currentMonth = YearMonth.from(LocalDate.now());
+
+        if (requestedMonth.isAfter(currentMonth)) {
+            throw new BadRequestException("Cannot fetch report for future month");
+        }
+
+        // 2. Fetch employees
+        Page<Employee> employeePage =
+                employeeRepository.findByAreaId(areaId, pageable);
+
+        List<Employee> employees = employeePage.getContent();
+
+        // 3. Date range
+        LocalDate startDate = requestedMonth.atDay(1);
+        LocalDate endDate = requestedMonth.atEndOfMonth();
+
+        // Cap for current month
+        if (requestedMonth.equals(currentMonth)) {
+            endDate = LocalDate.now();
+        }
+
+        // 4. Fetch holidays
+        List<Holiday> holidays =
+                holidayRepository.findHolidaysForMonth(startDate, endDate, areaId);
+
+        Set<LocalDate> holidayDates = holidays.stream()
+                .map(Holiday::getDate)
+                .collect(Collectors.toSet());
+
+        // 5. Extract employee IDs
+        List<Long> employeeIds = employees.stream()
+                .map(Employee::getId)
+                .toList();
+
+        // 6. Fetch attendance
+        List<Attendance> attendances =
+                attendanceRepository.findByEmployeeIdInAndDateBetween(
+                        employeeIds, startDate, endDate
+                );
+
+        // 7. Group attendance
+        Map<Long, List<Attendance>> attendanceMap =
+                attendances.stream()
+                        .collect(Collectors.groupingBy(
+                                a -> a.getEmployee().getId()
+                        ));
+
+        // 8. Build response
+        List<MonthlyAttendanceResponseDto> response = new ArrayList<>();
+
+        for (Employee emp : employees) {
+
+            LocalDate effectiveStartDate = startDate;
+            LocalDate effectiveEndDate = endDate;
+
+            // Adjust for joining date
+            if (emp.getJoiningDate().isAfter(startDate)) {
+                effectiveStartDate = emp.getJoiningDate();
+            }
+
+            // Adjust for exit date
+            if (emp.getExitDate() != null &&
+                    emp.getExitDate().isBefore(endDate)) {
+                effectiveEndDate = emp.getExitDate();
+            }
+
+            // Skip invalid range
+            if (effectiveStartDate.isAfter(effectiveEndDate)) {
+                response.add(new MonthlyAttendanceResponseDto(
+                        emp.getName(), 0, 0, 0, 0, 0
+                ));
+                continue;
+            }
+
+            // Total days
+            int totalDays =
+                    (int) ChronoUnit.DAYS.between(effectiveStartDate, effectiveEndDate) + 1;
+
+            LocalDate finalStartDate = effectiveStartDate;
+            LocalDate finalEndDate = effectiveEndDate;
+            // Holiday count (filtered)
+            long employeeHolidayDays = holidayDates.stream()
+                    .filter(d -> !d.isBefore(finalStartDate) &&
+                            !d.isAfter(finalEndDate))
+                    .count();
+
+            int workingDays = totalDays - (int) employeeHolidayDays;
+
+            List<Attendance> empAttendance =
+                    attendanceMap.getOrDefault(emp.getId(), Collections.emptyList());
+
+            Set<LocalDate> presentDates = new HashSet<>();
+            int lateDays = 0;
+
+            for (Attendance a : empAttendance) {
+
+                LocalDate date = a.getDate();
+
+                // Ignore outside effective range
+                if (date.isBefore(effectiveStartDate) ||
+                        date.isAfter(effectiveEndDate)) {
+                    continue;
+                }
+
+                // Ignore holidays
+                if (holidayDates.contains(date)) {
+                    continue;
+                }
+
+                presentDates.add(date);
+
+                if (a.getStatus() == AttendanceStatus.LATE) {
+                    lateDays++;
+                }
+            }
+
+            int presentDays = presentDates.size();
+            int absentDays = workingDays - presentDays;
+
+            response.add(new MonthlyAttendanceResponseDto(
+                    emp.getName(),
+                    presentDays,
+                    absentDays,
+                    lateDays,
+                    (int) employeeHolidayDays,
+                    workingDays
+            ));
+        }
+
+        return new PageImpl<>(response, pageable, employeePage.getTotalElements());
     }
 
     private Employee getCurrentEmployee() {
