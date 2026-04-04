@@ -1,13 +1,16 @@
 package com.example.kds_attendance_service_backend.service;
 
 import com.example.kds_attendance_service_backend.dto.CreateAreaRequestDto;
+import com.example.kds_attendance_service_backend.dto.DashBoardAreaResponseDto;
 import com.example.kds_attendance_service_backend.exception.BadRequestException;
+import com.example.kds_attendance_service_backend.exception.ResourceNotFoundException;
 import com.example.kds_attendance_service_backend.model.Area;
 import com.example.kds_attendance_service_backend.repository.AreaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -45,6 +48,21 @@ public class AreaServiceImpl implements AreaService{
             throw new RuntimeException(e);
         }
 
+
+    }
+
+    @Override
+    public List<DashBoardAreaResponseDto> getAreaList() {
+        List<Area>areaList = areaRepository.findDistinctAreas();
+        if(areaList == null){
+            throw  new ResourceNotFoundException("no ara added yet !!");
+        }
+
+        List<DashBoardAreaResponseDto> responseDtoList = areaList.stream().map(a->{
+           return new DashBoardAreaResponseDto(a.getId(),a.getName());
+        }).toList();
+
+        return responseDtoList;
 
     }
 }

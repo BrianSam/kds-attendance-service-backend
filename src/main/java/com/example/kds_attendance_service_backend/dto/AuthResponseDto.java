@@ -9,4 +9,5 @@ public class AuthResponseDto {
     private String token;
     private String name;
     private String role;
+    private Long employeeId;
 }
